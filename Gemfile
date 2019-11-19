@@ -5,3 +5,4 @@ gemspec
 
 gem 'pry'
 gem 'pry-nav'
+gem 'gql_ruby-utils', path: "../gql_ruby-utils"

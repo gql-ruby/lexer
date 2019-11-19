@@ -1,10 +1,11 @@
 require 'dry/initializer'
+require 'dry/equalizer'
 
 module GqlRuby
   class Lexer
     class Span
       extend Dry::Initializer
-      include Comparable
+      include Dry::Equalizer(:start, :finish, :item)
 
       option :start
       option :finish
@@ -14,12 +15,12 @@ module GqlRuby
         def zero_width(position, token)
           new(start: position, finish: position, item: token)
         end
-      end
 
-      def ==(other)
-        return false unless other.is_a?(self.class)
-
-        @start == other.start && @finish == other.finish && @item == other.item
+        def single_width(position, token)
+          finish = position.clone
+          finish.advance_column
+          new(start: position, finish: finish, item: token)
+        end
       end
     end
   end

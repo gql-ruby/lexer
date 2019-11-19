@@ -2,57 +2,98 @@ require "gql_ruby/lexer/version"
 require 'gql_ruby/source_position'
 require 'gql_ruby/lexer/token'
 require 'gql_ruby/lexer/span'
+require 'gql_ruby/iterator'
+require 'gql_ruby/lexer/types'
 
 module GqlRuby
   class Lexer
+    extend Dry::Initializer
+    include Dry::Monads[:maybe, :result, :try]
+
     class UnknownCharacterError < StandardError; end
     class UnexpectedCharacterError < StandardError; end
     class UnterminatedStringError < StandardError; end
     class UnknownCharacterInStringError < StandardError; end
-    class UnknownEscapeSequennceError < StandardError; end
+    class UnknownEscapeSequenceError < StandardError; end
     class UnexpectedEndOfFileError < StandardError; end
     class InvalidNumberError < StandardError; end
 
-    # @param [String] source GraphQL expression source code
-    # @return [Lexer]
-
-    attr_reader :iterator, :source, :length, :position, :reached_eof
-
-    def initialize(source)
-      @iterator = source.chars
-      @source = source
-      @length = length
-      @position = GqlRuby::SourcePosition.new
-      @reached_eof = false
-    end
+    param :source
+    option :iterator, default: -> { GqlRuby::Iterator.new(source.chars) }
+    option :length, default: -> { source.length }
+    option :position, default: -> { GqlRuby::SourcePosition.new }
+    option :reached_eof, default: -> { false }
 
     def next
-      return nil if reached_eof?
+      return None if reached_eof
 
       scan_over_whitespace
 
-      ch = iterator.first
+      ch = iterator.peek.fmap { |_, ch| ch }
 
-      case ch
-      when '{'
-      else
-        @reached_eof = true
-        Span.zero_width(position, Token::EOF)
-      end
+      value = case ch
+              when Some('!') then Success(emit_single_char(Token::EXCLAMATION))
+              when Some('$') then Success(emit_single_char(Token::DOLLAR))
+              when Some('(') then Success(emit_single_char(Token::PAREN_OPEN))
+              when Some(')') then Success(emit_single_char(Token::PAREN_CLOSE))
+              when Some('[') then Success(emit_single_char(Token::BRACKET_OPEN))
+              when Some(']') then Success(emit_single_char(Token::BRACKET_CLOSE))
+              when Some('{') then Success(emit_single_char(Token::CURLY_OPEN))
+              when Some('}') then Success(emit_single_char(Token::CURLY_CLOSE))
+              when Some(':') then Success(emit_single_char(Token::COLON))
+              when Some('=') then Success(emit_single_char(Token::EQUALS))
+              when Some('@') then Success(emit_single_char(Token::AT))
+              when Some('|') then Success(emit_single_char(Token::PIPE))
+              when Some(".") then scan_ellipsis
+              when Some('"') then scan_string
+              when None()
+                @reached_eof = true
+                Success(
+                  Span.zero_width(
+                    position,
+                    Token::EOF
+                  )
+                )
+              else
+                if number_start?(ch.value!)
+                  scan_number
+                elsif name_start?(ch.value!)
+                  scan_name
+                else
+                  Failure(
+                    Span.zero_width(
+                      position,
+                      UnknownCharacterError.new(ch.value!)
+                    )
+                  )
+                end
+              end
 
+      Maybe(value)
+    end
+
+    def emit_single_char(token)
+      start_pos = position.clone
+      value = next_char
+      raise "Internal error in lexer - EOF on emit_single_char" if value.failure?
+
+      Span.single_width(start_pos, token)
     end
 
     def scan_over_whitespace
-      while (ch = iterator.first) do
-        case ch
-        when "\t", " ", "\n", "\r", "," then next_char
-        when "#"
+      while (value = peek_char).to_result.success? do
+        _, ch = value.value!
+
+        if ["\t", " ", "\n", "\r", ","].include?(ch)
           next_char
-          while (ch = iterator.first) do
-            if ["\n", "\r"].include?(ch)
+        elsif ch == "#"
+          next_char
+          while (value = peek_char).to_result.success? do
+            _, ch = value.value!
+            if source_char?(ch) && ["\n", "\r"].include?(ch)
               next_char
               break
-            elsif ["\t", "\n", "\r"].include?(ch) || ch.ord >= " ".ord
+            elsif source_char?(ch)
               next_char
             else
               break
@@ -64,18 +105,239 @@ module GqlRuby
       end
     end
 
-    private
-
     def next_char
-      next_ = iterator.shift
-      return unless next_
+      value = iterator.next
+      return value if value == None()
 
-      next_ == "\n" ? position.advance_line : position.advance_column
-      next_
+      _, ch = value.value!
+      ch == "\n" ? position.advance_line : position.advance_column
+      value
     end
 
-    def reached_eof?
-      reached_eof
+    def peek_char
+      iterator.peek
+    end
+
+    def resolve_iterator
+      iterator.peek.flatten
+    end
+
+    def source_char?(ch)
+      ch == "\t" || ch == "\n" || ch == "\r" || ch >= " "
+    end
+
+    def number_start?(ch)
+      ch == "-" || ('0'..'9').include?(ch)
+    end
+
+    def name_start?(ch)
+      ch == '_' || ('A'..'Z').include?(ch.upcase)
+    end
+
+    def name_cont?(ch)
+      name_start?(ch) || ('0'..'9').include?(ch)
+    end
+
+    def scan_ellipsis
+      start_pos = position.clone
+      3.times do
+        value = next_char
+        return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if value.to_result.failure?
+
+        _, ch = value.value!
+        return Failure(Span.zero_width(start_pos, UnexpectedCharacterError.new(ch))) if ch != '.'
+      end
+
+      Success(Span.new(start: start_pos, finish: position, item: Token::ELLIPSIS))
+    end
+
+    def scan_number
+      start_pos = position.clone
+      start_value = peek_char
+      return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if start_value.to_result.failure?
+
+      start_idx, _ = start_value.value!
+      last_idx = start_idx
+      last_char = '1'
+      is_float = false
+
+      end_idx = loop do
+        break last_idx + 1 if (value = peek_char).to_result.failure?
+
+        idx, ch = value.value!
+        if ('0'..'9').include?(ch) || (ch == '-' && last_idx == start_idx)
+          is_second_zero = (ch == '0' && last_char == '0' && last_idx == start_idx)
+          return Failure(Span.zero_width(position, UnexpectedCharacterError.new('0'))) if is_second_zero
+
+          next_char
+          last_char = ch
+        elsif last_char == '-'
+          return Failure(Span.zero_width(position, UnexpectedCharacterError.new(ch)))
+        else
+          break idx
+        end
+        last_idx = idx
+      end
+
+      if (value = peek_char).to_result.success?
+        new_start_idx, ch = value.value!
+        if ch == '.'
+          is_float = true
+          last_idx = new_start_idx
+          next_char
+          end_idx = loop do
+            value = peek_char
+            if value.to_result.failure?
+              return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if last_idx == new_start_idx
+              break last_idx + 1
+            end
+
+            idx, ch = value.value!
+            if ('0'..'9').include?(ch)
+              next_char
+            elsif last_idx == new_start_idx
+              return Failure(Span.zero_width(position, UnexpectedCharacterError.new(ch)))
+            else
+              break idx
+            end
+
+            last_idx = idx
+          end
+        end
+        if ch == 'e' || ch == 'E'
+          is_float = true
+          next_char
+          last_idx = new_start_idx
+
+          end_idx = loop do
+            value = peek_char
+            if value.to_result.failure?
+              return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if last_idx == new_start_idx
+              break last_idx + 1
+            end
+
+            idx, ch = value.value!
+            if ('0'..'9').include?(ch) || (last_idx == new_start_idx && ['-', '+'].include?(ch))
+              next_char
+            elsif last_idx == new_start_idx
+              return Failure(Span.zero_width(position, UnexpectedCharacterError.new(ch)))
+            else
+              break idx
+            end
+
+            last_idx = idx
+          end
+        end
+      end
+
+      number = source[start_idx..end_idx]
+      end_pos = position
+
+      type = is_float ? Types::Coercible::Float : Types::Coercible::Integer
+      token = Token::Scalar(type[number])
+
+      Success(Span.new(start: start_pos, finish: end_pos, item: token))
+    end
+
+    def scan_string
+      start_pos = position.clone
+      start_value = next_char
+      return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if start_value.to_result.failure?
+
+      start_idx, start_ch = start_value.value!
+      return Failure(Span.zero_width(position, UnterminatedStringError.new)) if start_ch != '"'
+
+      escaped = false
+      old_pos = position.clone
+      while (value = next_char).to_result.success? do
+        idx, ch = value.value!
+        case ch
+        when 'b', 'f', 'n', 'r', 't', '/' then escaped = false if escaped
+        when 'u'
+          if escaped
+            escaped = false
+            scan_value = scan_escaped_unicode(old_pos)
+            return scan_value if scan_value.failure?
+          end
+        when '\\'
+          escaped = !escaped
+        when '"'
+          return Success(Span.new(
+            start: start_pos,
+            finish: position,
+            item: Token::Scalar(Types::Strict::String[source[(start_idx + 1)...idx]])
+          )) unless escaped
+          escaped = false
+          when "\n", "\r"
+            return Failure(Span.zero_width(
+              old_pos,
+              UnterminatedStringError.new
+            ))
+        else
+          return Failure(Span.zero_width(old_pos, UnknownEscapeSequenceError.new("\\#{ch}"))) if escaped
+          return Failure(Span.zero_width(old_pos, UnknownCharacterInStringError.new(ch))) if !source_char?(ch)
+        end
+        old_pos = position.clone
+      end
+      Failure(Span.zero_width(position, UnterminatedStringError.new))
+    end
+
+    def scan_escaped_unicode(start_pos)
+      start_value = peek_char
+      return Failure(Span.zero_width(position, UnterminatedStringError.new)) if start_value.to_result.failure?
+
+      start_idx, _ = start_value.value!
+      end_idx = start_idx
+      len = 0
+
+      4.times do
+        value = next_char
+        return Failure(Span.zero_width(position, UnterminatedStringError.new)) if value.to_result.failure?
+
+        idx, ch = value.value!
+        break if !alphanumeric?(ch)
+
+        end_idx = idx
+        len += 1
+      end
+
+      escape = source[start_idx..end_idx]
+      return Failure(Span.zero_width(start_pos, UnknownEscapeSequenceError.new("\\u#{escape}"))) if len != 4
+      # TODO: Add validation for proper unicode sequence
+      codepoint = Try { Integer(escape, 16) }.to_result
+      return Failure(Span.zero_width(start_pos, UnknownEscapeSequenceError.new("\\u#{escape}"))) if codepoint.failure?
+
+      return Success()
+    end
+
+    def alphanumeric?(ch)
+      Maybe(ch =~ /[[:alnum:]]/).to_result.success?
+    end
+
+    def scan_name
+      start_pos = position.clone
+      start_value = next_char
+      return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if start_value.to_result.failure?
+
+      start_idx, start_ch = start_value.value!
+      end_idx = start_idx
+      while (value = peek_char).to_result.success? do
+        idx, ch = value.value!
+        if name_cont?(ch)
+          next_char
+          end_idx = idx
+        else
+          break
+        end
+      end
+
+      Success(
+        Span.new(
+          start: start_pos,
+          finish: position,
+          item: Token::Name(source[start_idx..end_idx])
+        )
+      )
     end
   end
 end
