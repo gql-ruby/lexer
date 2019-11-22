@@ -703,7 +703,10 @@ RSpec.describe GqlRuby::Lexer do
         break if value.item == described_class::Token::EOF
       when Some(Dry::Monads::Result::Failure)
         value = t.flatten.failure
-        raise StandardError, "Error happened on line #{value.start.line}, col #{value.start.col} - #{value.item.inspect}"
+        line = value.start.line
+        col = value.start.col
+        item = value.item.inspect
+        raise StandardError, "Error happened on line #{line}, col #{col} - #{item}"
       when Dry::Monads::Maybe::None
         raise 'EOF before EndOfFile'
       end
@@ -724,9 +727,7 @@ RSpec.describe GqlRuby::Lexer do
       case t = lexer.next
       when Some(Dry::Monads::Result::Success)
         value = t.flatten.value!
-        if value.item == described_class::Token::EOF
-          raise "Error has not been raised for #{source}"
-        end
+        raise "Error has not been raised for #{source}" if value.item == described_class::Token::EOF
       when Some(Dry::Monads::Result::Failure)
         return t.flatten.failure
       when Dry::Monads::Maybe::None
