@@ -94,14 +94,12 @@ module GqlRuby
           next_char
           while (value = peek_char).to_result.success?
             _, ch = value.value!
-            if source_char?(ch) && ["\n", "\r"].include?(ch)
-              next_char
-              break
-            elsif source_char?(ch)
-              next_char
-            else
-              break
-            end
+            is_line_break = source_char?(ch) && ["\n", "\r"].include?(ch)
+            break unless is_line_break || source_char?(ch)
+
+            next_char && break if is_line_break
+
+            next_char if source_char?(ch)
           end
         else
           break
@@ -126,20 +124,20 @@ module GqlRuby
       iterator.peek.flatten
     end
 
-    def source_char?(ch)
-      ch == "\t" || ch == "\n" || ch == "\r" || ch >= ' '
+    def source_char?(char)
+      ["\t", "\n", "\r"].include?(char) || char >= ' '
     end
 
-    def number_start?(ch)
-      ch == '-' || ('0'..'9').include?(ch)
+    def number_start?(char)
+      ('0'..'9').include?(char) || char == '-'
     end
 
-    def name_start?(ch)
-      ch == '_' || ('A'..'Z').include?(ch.upcase)
+    def name_start?(char)
+      ('A'..'Z').include?(char.upcase) || char == '_'
     end
 
-    def name_cont?(ch)
-      name_start?(ch) || ('0'..'9').include?(ch)
+    def name_cont?(char)
+      ('0'..'9').include?(char) || name_start?(char)
     end
 
     def scan_ellipsis
@@ -330,7 +328,7 @@ module GqlRuby
       start_value = next_char
       return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if start_value.to_result.failure?
 
-      start_idx, start_ch = start_value.value!
+      start_idx, = start_value.value!
       end_idx = start_idx
       while (value = peek_char).to_result.success?
         idx, ch = value.value!
