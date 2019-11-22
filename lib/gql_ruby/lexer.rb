@@ -29,7 +29,7 @@ module GqlRuby
     attr_reader :token
 
     def next
-      return @token = None if reached_eof
+      return @token = None() if reached_eof
 
       scan_over_whitespace
 
