@@ -1,4 +1,6 @@
-require "gql_ruby/lexer/version"
+# frozen_string_literal: true
+
+require 'gql_ruby/lexer/version'
 require 'gql_ruby/source_position'
 require 'gql_ruby/lexer/token'
 require 'gql_ruby/lexer/span'
@@ -46,7 +48,7 @@ module GqlRuby
               when Some('=') then Success(emit_single_char(Token::EQUALS))
               when Some('@') then Success(emit_single_char(Token::AT))
               when Some('|') then Success(emit_single_char(Token::PIPE))
-              when Some(".") then scan_ellipsis
+              when Some('.') then scan_ellipsis
               when Some('"') then scan_string
               when None()
                 @reached_eof = true
@@ -77,20 +79,22 @@ module GqlRuby
     def emit_single_char(token)
       start_pos = position.clone
       value = next_char
-      raise "Internal error in lexer - EOF on emit_single_char" if value.failure?
+      if value.failure?
+        raise 'Internal error in lexer - EOF on emit_single_char'
+      end
 
       Span.single_width(start_pos, token)
     end
 
     def scan_over_whitespace
-      while (value = peek_char).to_result.success? do
+      while (value = peek_char).to_result.success?
         _, ch = value.value!
 
-        if ["\t", " ", "\n", "\r", ","].include?(ch)
+        if ["\t", ' ', "\n", "\r", ','].include?(ch)
           next_char
-        elsif ch == "#"
+        elsif ch == '#'
           next_char
-          while (value = peek_char).to_result.success? do
+          while (value = peek_char).to_result.success?
             _, ch = value.value!
             if source_char?(ch) && ["\n", "\r"].include?(ch)
               next_char
@@ -125,11 +129,11 @@ module GqlRuby
     end
 
     def source_char?(ch)
-      ch == "\t" || ch == "\n" || ch == "\r" || ch >= " "
+      ch == "\t" || ch == "\n" || ch == "\r" || ch >= ' '
     end
 
     def number_start?(ch)
-      ch == "-" || ('0'..'9').include?(ch)
+      ch == '-' || ('0'..'9').include?(ch)
     end
 
     def name_start?(ch)
@@ -144,10 +148,14 @@ module GqlRuby
       start_pos = position.clone
       3.times do
         value = next_char
-        return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if value.to_result.failure?
+        if value.to_result.failure?
+          return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new))
+        end
 
         _, ch = value.value!
-        return Failure(Span.zero_width(start_pos, UnexpectedCharacterError.new(ch))) if ch != '.'
+        if ch != '.'
+          return Failure(Span.zero_width(start_pos, UnexpectedCharacterError.new(ch)))
+        end
       end
 
       Success(Span.new(start: start_pos, finish: position, item: Token::ELLIPSIS))
@@ -156,9 +164,11 @@ module GqlRuby
     def scan_number
       start_pos = position.clone
       start_value = peek_char
-      return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if start_value.to_result.failure?
+      if start_value.to_result.failure?
+        return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new))
+      end
 
-      start_idx, _ = start_value.value!
+      start_idx, = start_value.value!
       last_idx = start_idx
       last_char = '1'
       is_float = false
@@ -169,7 +179,9 @@ module GqlRuby
         idx, ch = value.value!
         if ('0'..'9').include?(ch) || (ch == '-' && last_idx == start_idx)
           is_second_zero = (ch == '0' && last_char == '0' && last_idx == start_idx)
-          return Failure(Span.zero_width(position, UnexpectedCharacterError.new('0'))) if is_second_zero
+          if is_second_zero
+            return Failure(Span.zero_width(position, UnexpectedCharacterError.new('0')))
+          end
 
           next_char
           last_char = ch
@@ -190,7 +202,10 @@ module GqlRuby
           end_idx = loop do
             value = peek_char
             if value.to_result.failure?
-              return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if last_idx == new_start_idx
+              if last_idx == new_start_idx
+                return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new))
+              end
+
               break last_idx + 1
             end
 
@@ -214,7 +229,10 @@ module GqlRuby
           end_idx = loop do
             value = peek_char
             if value.to_result.failure?
-              return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if last_idx == new_start_idx
+              if last_idx == new_start_idx
+                return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new))
+              end
+
               break last_idx + 1
             end
 
@@ -244,14 +262,18 @@ module GqlRuby
     def scan_string
       start_pos = position.clone
       start_value = next_char
-      return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if start_value.to_result.failure?
+      if start_value.to_result.failure?
+        return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new))
+      end
 
       start_idx, start_ch = start_value.value!
-      return Failure(Span.zero_width(position, UnterminatedStringError.new)) if start_ch != '"'
+      if start_ch != '"'
+        return Failure(Span.zero_width(position, UnterminatedStringError.new))
+      end
 
       escaped = false
       old_pos = position.clone
-      while (value = next_char).to_result.success? do
+      while (value = next_char).to_result.success?
         idx, ch = value.value!
         case ch
         when 'b', 'f', 'n', 'r', 't', '/' then escaped = false if escaped
@@ -264,20 +286,26 @@ module GqlRuby
         when '\\'
           escaped = !escaped
         when '"'
-          return Success(Span.new(
-            start: start_pos,
-            finish: position,
-            item: Token::Scalar(Types::Strict::String[source[(start_idx + 1)...idx]])
-          )) unless escaped
+          unless escaped
+            return Success(Span.new(
+                             start: start_pos,
+                             finish: position,
+                             item: Token::Scalar(Types::Strict::String[source[(start_idx + 1)...idx]])
+                           ))
+          end
           escaped = false
-          when "\n", "\r"
-            return Failure(Span.zero_width(
-              old_pos,
-              UnterminatedStringError.new
-            ))
+        when "\n", "\r"
+          return Failure(Span.zero_width(
+                           old_pos,
+                           UnterminatedStringError.new
+                         ))
         else
-          return Failure(Span.zero_width(old_pos, UnknownEscapeSequenceError.new("\\#{ch}"))) if escaped
-          return Failure(Span.zero_width(old_pos, UnknownCharacterInStringError.new(ch))) if !source_char?(ch)
+          if escaped
+            return Failure(Span.zero_width(old_pos, UnknownEscapeSequenceError.new("\\#{ch}")))
+        end
+          unless source_char?(ch)
+            return Failure(Span.zero_width(old_pos, UnknownCharacterInStringError.new(ch)))
+          end
         end
         old_pos = position.clone
       end
@@ -286,30 +314,39 @@ module GqlRuby
 
     def scan_escaped_unicode(start_pos)
       start_value = peek_char
-      return Failure(Span.zero_width(position, UnterminatedStringError.new)) if start_value.to_result.failure?
+      if start_value.to_result.failure?
+        return Failure(Span.zero_width(position, UnterminatedStringError.new))
+      end
 
-      start_idx, _ = start_value.value!
+      start_idx, = start_value.value!
       end_idx = start_idx
       len = 0
 
       4.times do
         value = next_char
-        return Failure(Span.zero_width(position, UnterminatedStringError.new)) if value.to_result.failure?
+        if value.to_result.failure?
+          return Failure(Span.zero_width(position, UnterminatedStringError.new))
+        end
 
         idx, ch = value.value!
-        break if !alphanumeric?(ch)
+        break unless alphanumeric?(ch)
 
         end_idx = idx
         len += 1
       end
 
       escape = source[start_idx..end_idx]
-      return Failure(Span.zero_width(start_pos, UnknownEscapeSequenceError.new("\\u#{escape}"))) if len != 4
+      if len != 4
+        return Failure(Span.zero_width(start_pos, UnknownEscapeSequenceError.new("\\u#{escape}")))
+      end
+
       # TODO: Add validation for proper unicode sequence
       codepoint = Try { Integer(escape, 16) }.to_result
-      return Failure(Span.zero_width(start_pos, UnknownEscapeSequenceError.new("\\u#{escape}"))) if codepoint.failure?
+      if codepoint.failure?
+        return Failure(Span.zero_width(start_pos, UnknownEscapeSequenceError.new("\\u#{escape}")))
+      end
 
-      return Success()
+      Success()
     end
 
     def alphanumeric?(ch)
@@ -319,11 +356,13 @@ module GqlRuby
     def scan_name
       start_pos = position.clone
       start_value = next_char
-      return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new)) if start_value.to_result.failure?
+      if start_value.to_result.failure?
+        return Failure(Span.zero_width(position, UnexpectedEndOfFileError.new))
+      end
 
       start_idx, start_ch = start_value.value!
       end_idx = start_idx
-      while (value = peek_char).to_result.success? do
+      while (value = peek_char).to_result.success?
         idx, ch = value.value!
         if name_cont?(ch)
           next_char
