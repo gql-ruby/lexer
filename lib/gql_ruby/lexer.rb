@@ -24,8 +24,10 @@ module GqlRuby
     option :position, default: -> { GqlRuby::SourcePosition.new }
     option :reached_eof, default: -> { false }
 
+    attr_reader :token
+
     def next
-      return None if reached_eof
+      return @token = None if reached_eof
 
       scan_over_whitespace
 
@@ -69,7 +71,7 @@ module GqlRuby
                 end
               end
 
-      Maybe(value)
+      @token = Maybe(value)
     end
 
     def emit_single_char(token)
