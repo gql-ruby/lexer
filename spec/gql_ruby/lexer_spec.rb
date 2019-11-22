@@ -485,14 +485,16 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(1, 0, 1),
         described_class::UnexpectedCharacterError.new('0')
       )
+      expect(actual).to eq(expected)
     end
 
     it 'throws error for +1' do
       actual = tokenize_error('+1')
       expected = described_class::Span.zero_width(
         GqlRuby::SourcePosition.new(0, 0, 0),
-        described_class::UnexpectedCharacterError.new('+')
+        described_class::UnknownCharacterError.new('+')
       )
+      expect(actual).to eq(expected)
     end
 
     it 'throws error for 1.' do
@@ -501,6 +503,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(2, 0, 2),
         described_class::UnexpectedEndOfFileError.new
       )
+      expect(actual).to eq(expected)
     end
 
     it 'throws error for .123' do
@@ -509,6 +512,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::UnexpectedCharacterError.new('.')
       )
+      expect(actual).to eq(expected)
     end
 
     it 'throws error for 1.A' do
@@ -517,6 +521,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(2, 0, 2),
         described_class::UnexpectedCharacterError.new('A')
       )
+      expect(actual).to eq(expected)
     end
 
     it 'throws error for -A' do
@@ -525,6 +530,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(1, 0, 1),
         described_class::UnexpectedCharacterError.new('A')
       )
+      expect(actual).to eq(expected)
     end
 
     it 'throws error for 1.0e' do
@@ -533,6 +539,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(4, 0, 4),
         described_class::UnexpectedEndOfFileError.new
       )
+      expect(actual).to eq(expected)
     end
 
     it 'throws error for 1.0eA' do
@@ -541,6 +548,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(4, 0, 4),
         described_class::UnexpectedCharacterError.new('A')
       )
+      expect(actual).to eq(expected)
     end
   end
 
@@ -551,6 +559,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::EXCLAMATION
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses $' do
@@ -559,6 +568,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::DOLLAR
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses (' do
@@ -567,6 +577,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::PAREN_OPEN
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses )' do
@@ -575,6 +586,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::PAREN_CLOSE
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses [' do
@@ -583,6 +595,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::BRACKET_OPEN
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses ]' do
@@ -591,6 +604,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::BRACKET_CLOSE
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses {' do
@@ -599,6 +613,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::CURLY_OPEN
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses }' do
@@ -607,6 +622,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::CURLY_CLOSE
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses :' do
@@ -615,6 +631,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::COLON
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses =' do
@@ -623,6 +640,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::EQUALS
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses @' do
@@ -631,6 +649,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::AT
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses |' do
@@ -639,6 +658,7 @@ RSpec.describe GqlRuby::Lexer do
         GqlRuby::SourcePosition.new(0, 0, 0),
         described_class::Token::PIPE
       )
+      expect(actual).to eq(expected)
     end
 
     it 'parses ...' do

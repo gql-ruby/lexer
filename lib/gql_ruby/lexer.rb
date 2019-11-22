@@ -146,6 +146,8 @@ module GqlRuby
 
     def scan_ellipsis
       start_pos = position.clone
+      start_value = peek_char
+
       3.times do
         value = next_char
         if value.to_result.failure?
@@ -154,7 +156,7 @@ module GqlRuby
 
         _, ch = value.value!
         if ch != '.'
-          return Failure(Span.zero_width(start_pos, UnexpectedCharacterError.new(ch)))
+          return Failure(Span.zero_width(start_pos, UnexpectedCharacterError.new(start_value.value!.last)))
         end
       end
 
