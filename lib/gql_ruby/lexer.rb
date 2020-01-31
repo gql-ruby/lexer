@@ -48,6 +48,7 @@ module GqlRuby
               when Some('=') then Success(emit_single_char(Token::EQUALS))
               when Some('@') then Success(emit_single_char(Token::AT))
               when Some('|') then Success(emit_single_char(Token::PIPE))
+              when Some('&') then Success(emit_single_char(Token::AMP))
               when Some('.') then scan_ellipsis
               when Some('"') then scan_string
               when None()
@@ -236,7 +237,7 @@ module GqlRuby
         end
       end
 
-      number = source[start_idx..end_idx]
+      number = source[start_idx..end_idx - 1]
       end_pos = position
 
       type = is_float ? Types::Coercible::Float : Types::Coercible::Integer
@@ -269,11 +270,12 @@ module GqlRuby
           escaped = !escaped
         when '"'
           unless escaped
-            return Success(Span.new(
-                             start: start_pos,
-                             finish: position,
-                             item: Token::Scalar(Types::Strict::String[source[(start_idx + 1)...idx]])
-                           ))
+            return Success(
+              Span.new(
+                start: start_pos,
+                finish: position,
+                item: Token::Scalar(Types::Strict::String[source[(start_idx + 1)...idx]])
+              ))
           end
           escaped = false
         when "\n", "\r"

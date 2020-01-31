@@ -20,6 +20,7 @@ module GqlRuby
       EQUALS = :equals
       AT = :at
       PIPE = :pipe
+      AMP = :amp
 
       class Name
         extend Dry::Initializer

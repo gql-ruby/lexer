@@ -1,8 +1,13 @@
 # GqlRuby::Lexer
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/gql_ruby/lexer`. To experiment with that code, run `bin/console` for an interactive prompt.
+GraphQL Lexer.
 
-TODO: Delete this and the text above, and describe your gem
+Thanks to [Juniper](https://github.com/graphql-rust/juniper/) team, your work is very valuable!
+
+TODOs:
+
+[] add support of block string from [June 2018](http://spec.graphql.org/June2018) GraphQL specification.
+[] clean out the code
 
 ## Installation
 
@@ -22,7 +27,9 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+`GqlRuby::Lexer.new(source_string)` to get lexer instance.
+
+Each call of `GqlRuby::Lexer#next` returns you next token, wrapped into `Maybe` and `Result` monades from `dry-monads`.
 
 ## Development
 
@@ -32,7 +39,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/gql_ruby-lexer.
+Bug reports and pull requests are welcome on GitHub at https://github.com/gql_ruby/gql_ruby-lexer.
 
 ## License
 
